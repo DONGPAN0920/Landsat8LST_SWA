@@ -1,0 +1,20 @@
+[general]
+name=Landsat 8 LST Retriever (SWA)
+description=Retrieve Land Surface Temperature (LST) from Landsat 8 data with Split-Window Algorithm
+about=This module allows to retrieve Land Surface Temperature (LST) from Landsat 8 data (TIRS channels) using Split-Windows Algorithm. Water Vapor content and Land Surface Emissivity needed, but both could be recieved automatically in module (Water vapor via MODIS MOD09, LSE via NDVI).
+version=1.0
+qgisMinimumVersion=2.0
+
+author=Eduard Kazakov
+email=silenteddie@gmail.com
+
+icon=icon.png
+
+tags=landsat8, lst, land surface temperature
+
+homepage=http://www.ekazakov.info/
+tracker=
+repository=
+
+experimental=False
+deprecated=False
