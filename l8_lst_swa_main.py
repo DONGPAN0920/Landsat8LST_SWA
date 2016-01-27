@@ -36,6 +36,7 @@ import resources
 import l8_lst_swa_common_lib
 import os
 import modis_water_vapor_interface
+from osgeo import gdal
 
 class L8_lst_swaMainDlg(QtGui.QWidget):
 
@@ -48,6 +49,7 @@ class L8_lst_swaMainDlg(QtGui.QWidget):
 
         self.readyInterface()
 
+
         ##### BUTTON HANDLERS
         ### Common
         self.connect(self.ui.closeButton, QtCore.SIGNAL("clicked()"), self.cancel)
@@ -59,10 +61,11 @@ class L8_lst_swaMainDlg(QtGui.QWidget):
         self.connect(self.ui.satTabToolBox, QtCore.SIGNAL("currentChanged(int)"), self.satTabChangeRadioButtons)
         self.ui.satTabAqDateTime.dateChanged.connect(self.correctedDateChanged)
 
+        self.connect(self.ui.satTabMTLAddButton, QtCore.SIGNAL("clicked()"), self.mtlBrowse)
+        self.connect(self.ui.satTabRawCheckButton, QtCore.SIGNAL("clicked()"), self.mtlCheck)
+
+
         ### Ground data tab
-        self.connect(self.ui.LSEClassifiedRadioButton, QtCore.SIGNAL("clicked()"), self.LSETypeChange)
-        self.connect(self.ui.LSENDVIRadioButton, QtCore.SIGNAL("clicked()"), self.LSETypeChange)
-        self.connect(self.ui.LSEGRIDRadioButton, QtCore.SIGNAL("clicked()"), self.LSETypeChange)
 
 
         ### Output tab
@@ -77,7 +80,6 @@ class L8_lst_swaMainDlg(QtGui.QWidget):
         self.ui.satTabNDVIComboBox.addItems(rasterLayers)
         self.ui.waterVaporGRIDComboBox.addItems(rasterLayers)
         self.ui.LSEGRIDComboBox.addItems(rasterLayers)
-        self.ui.LSEClassifiedRasterComboBox.addItems(rasterLayers)
 
 
 
@@ -108,14 +110,6 @@ class L8_lst_swaMainDlg(QtGui.QWidget):
         else:
             self.ui.satTabCorrectedRadioButton.setChecked(True)
 
-    def LSETypeChange(self):
-        if self.ui.LSEClassifiedRadioButton.isChecked():
-            self.ui.LSEClassificationGroupBox.setEnabled(True)
-        if self.ui.LSENDVIRadioButton.isChecked():
-            self.ui.LSEClassificationGroupBox.setDisabled(True)
-        if self.ui.LSEGRIDRadioButton.isChecked():
-            self.ui.LSEClassificationGroupBox.setDisabled(True)
-
     def correctedDateChanged(self):
         self.currentDate = self.ui.satTabAqDateTime.date().toString("dd.MM.yyyy")
 
@@ -128,6 +122,12 @@ class L8_lst_swaMainDlg(QtGui.QWidget):
         filename = QtGui.QFileDialog.getSaveFileName(self, 'Save file', '', '*.tif')
         if filename:
             self.ui.outputLSTLine.setText(filename)
+        pass
+
+    def mtlBrowse (self):
+        filename = QtGui.QFileDialog.getOpenFileName(self, 'Open file', '', '*.txt')
+        if filename:
+            self.ui.satTabMTLPathLine.setText(filename)
         pass
 
     ##############################################################
@@ -151,13 +151,58 @@ class L8_lst_swaMainDlg(QtGui.QWidget):
             QtGui.QMessageBox.critical(None, "Error", 'Output path is not writable!')
             self.readyInterface()
             return
+
+    def mtlCheck(self):
+        if not self.ui.satTabMTLPathLine.text():
+            QtGui.QMessageBox.critical(None, "Error", 'Input MTL file not specified')
+            return
+        metadataPath = self.ui.satTabMTLPathLine.text()
+        metadataBasePath = os.path.dirname(metadataPath)
+        # Check if all files available
+        try:
+            mtl_dict = l8_lst_swa_common_lib.readBasicMetadata(metadataPath)
+        except:
+            QtGui.QMessageBox.critical(None, "Error", 'Invalid metadata')
+            self.readyInterface()
+            return
+
+        #if not (os.path.isfile(metadataBasePath + '/' + mtl_dict['mtl_band4']) and os.path.isfile(
+        #                metadataBasePath + '/' + mtl_dict['mtl_band5']) and os.path.isfile(
+        #                metadataBasePath + '/' + mtl_dict['mtl_band10']) and os.path.isfile(metadataBasePath + '/' + mtl_dict['mtl_band11'])):
+        #    QtGui.QMessageBox.critical(None, "Error", 'Some of needed landsat files not exists')
+        #    return
+
+        self.ui.statusSatelliteCheckBox.setChecked(True)
+
+        # Check if extra data available
+
+
     ##############################################################
     ################ END CHECK INPUTS
     ##############################################################
 
+    ##############################################################
+    ################ PROCESSING
+    ##############################################################
+
+    def prepareRawLandsat(self):
+        metadataPath = self.ui.satTabMTLPathLine.text()
+        mtl_dict = l8_lst_swa_common_lib.readBasicMetadata(metadataPath)
+        metadataBasePath = os.path.dirname(metadataPath)
+
+        ### B4, B5, B10, B11 to radiance
+        B4Radiance = l8_lst_swa_common_lib.Landsat8_DN_to_radiance(1,metadataBasePath + '/' + mtl_dict['mtl_band4'],4,metadataPath)
+        B5Radiance = l8_lst_swa_common_lib.Landsat8_DN_to_radiance(1,metadataBasePath + '/' + mtl_dict['mtl_band5'],5,metadataPath)
+        B10Radiance = l8_lst_swa_common_lib.Landsat8_DN_to_radiance(1,metadataBasePath + '/' + mtl_dict['mtl_band10'],10,metadataPath)
+        B11Radiance = l8_lst_swa_common_lib.Landsat8_DN_to_radiance(1,metadataBasePath + '/' + mtl_dict['mtl_band11'],11,metadataPath)
+
+        ### NDVI Array
+        #NDVIArray = (B5Radiance - B4Radiance) / (B5Radiance + B4Radiance)
+
     # Close window by pressing "Cancel" button
     def cancel(self):
+        pass
         #TEST
-        landsat = l8_lst_swa_common_lib.getLayerByName('B4_reflectance')
-        print modis_water_vapor_interface.getWaterVaporForGivenRaster(landsat,2013,7,2,'s','1 25994U 99068A   13183.23066698  .00000248  00000-0  65149-4 0  9990','2 25994 098.2058 257.9549 0001580 091.8015 268.3387 14.57122310720105', self.ui.processLabel, 'E:\\modistests')
-        #self.close()
+        #landsat = l8_lst_swa_common_lib.getLayerByName('B4_reflectance')
+        #print modis_water_vapor_interface.getWaterVaporForGivenRaster(landsat,2013,7,2,'s','1 25994U 99068A   13183.23066698  .00000248  00000-0  65149-4 0  9990','2 25994 098.2058 257.9549 0001580 091.8015 268.3387 14.57122310720105', self.ui.processLabel, 'E:\\modistests')
+        self.close()
