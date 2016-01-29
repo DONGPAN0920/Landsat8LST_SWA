@@ -7,6 +7,17 @@ from qgis.core import *
 from PyQt4.QtGui import QApplication
 
 def create_orbital_track_shapefile_for_day (year, month, day, step_minutes, tle_line1, tle_line2, sat_name):
+    """
+    Return memory QgsVectorLayer with points (WGS84) of satellite positions for given day with given period in minutes
+    :param year: year of aquisition
+    :param month: month of aquisition
+    :param day: day of aquisition
+    :param step_minutes: period of position modeling in minutes
+    :param tle_line1: TLE Line 1
+    :param tle_line2: TLLE Line 2
+    :param sat_name: Name of satellite (e.g. Terra)
+    :return:
+    """
     try:
         orb = Orbital("N",tle_file=None,line1=tle_line1, line2=tle_line2)
     except:

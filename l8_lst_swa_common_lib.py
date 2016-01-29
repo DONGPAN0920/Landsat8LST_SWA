@@ -8,6 +8,11 @@ import numpy as np
 from qgis.analysis import QgsRasterCalculator, QgsRasterCalculatorEntry
 
 def isWritable(path):
+    """
+    Check if path is writable
+    :param path: string; path to be checked
+    :return: Boolean
+    """
     try:
         testfile = tempfile.TemporaryFile(dir = path)
         testfile.close()
@@ -20,6 +25,11 @@ def isWritable(path):
 
 
 def getLayerByName(vectorLayerName):
+    """
+    Return QgsVectorLayer by name from project layers
+    :param vectorLayerName: string; QgsVectorLayer's name
+    :return: QgsVectorLayer
+    """
     layer = None
     for lyr in QgsMapLayerRegistry.instance().mapLayers().values():
         if lyr.name() == vectorLayerName:
@@ -29,10 +39,21 @@ def getLayerByName(vectorLayerName):
     return layer
 
 def saveVectorLayerToSHP(vectorLayer, shpFullPath):
+    """
+    Write given QgsVectorLayer to file system as shapefile
+    :param vectorLayer: QgsVectorLayer;
+    :param shpFullPath: string
+    :return: 0 if everything is OK, else error codes
+    """
     error = QgsVectorFileWriter.writeAsVectorFormat(vectorLayer, shpFullPath, "UTF-8", None, "ESRI Shapefile")
     return error
 
 def getFeaturesAsList (vectorLayer):
+    """
+    Return all features of QgsVectorLayer a list (cause Qgis default is iterator)
+    :param vectorLayer: QgsVectorLayer
+    :return: list of features (QgsFeature)
+    """
     features = vectorLayer.getFeatures()
     featuresList = []
     for feature in features:
@@ -43,6 +64,14 @@ def getFeaturesAsList (vectorLayer):
 
 
 def reprojectVectorLayerToMemoryLayer (sourceCRS, destCRS, vectorLayer):
+    """
+    Generates new vector layer, each feature of which is reprojected from sourceCRS to destCRS
+    Multigeometry for now is not supported
+    :param sourceCRS: QgsCoordinateReferenceSystem (native for input vector layer)
+    :param destCRS: QgsCoordinateReferenceSystem (destination, input layer will be reprojected to it)
+    :param vectorLayer: QgsVectorLayer (to be reprojected)
+    :return: QgsVectorLayer (reprojected) as memory layer; None if unsupported type of geometry
+    """
     xform = QgsCoordinateTransform(sourceCRS, destCRS)
 
     if vectorLayer.wkbType() == QGis.WKBPolygon:
@@ -125,7 +154,15 @@ def reprojectVectorLayerToMemoryLayer (sourceCRS, destCRS, vectorLayer):
 
     return None
 
+
+
 def getRasterLayerExtent (inputRaster, outCRS = None):
+    """
+    Return raster layer extent as dict. Extent can be reprojected on fly is outCRS is defined
+    :param inputRaster: QgsRasterLayer
+    :param outCRS: output CRS if reprojection is needed
+    :return: dict: {'xMax': 0, 'xMin': 0, 'yMax': 0, 'yMin': 0,}
+    """
     extent = inputRaster.extent()
     if not outCRS:
         return {'xMax':extent.xMaximum(),'xMin':extent.xMinimum(),'yMax':extent.yMaximum(),'yMin':extent.yMinimum()}
@@ -138,10 +175,15 @@ def getRasterLayerExtent (inputRaster, outCRS = None):
 
 
 
-##### Landsat
+##### Landsat #####
 
 def read_metadata_parameter (metadata_path, parameter):
-    # Read metadata parameter from Landsat 8 MTL file
+    """
+     Read metadata parameter from Landsat 8 MTL file
+    :param metadata_path: string; path to ...MTL.txt file of landsat 8 data set
+    :param parameter: string; full name of parameter, e.g. RADIANCE_MAXIMUM_BAND_4
+    :return: string; value of parameter at metadata; Exception if requested parameter not exists
+    """
     metadata_file = open (metadata_path,'r')
     for line in metadata_file:
         if line.find(parameter) <> -1:
@@ -151,6 +193,17 @@ def read_metadata_parameter (metadata_path, parameter):
     raise exceptions.MetadataError ('Parameter ' + parameter + ' not found at metadata')
 
 def save_nparray_as_raster (nparray, driver_name, cell_type, base_raster_XSize, base_raster_YSize, base_raster_projection, base_raster_transform, out_path):
+    """
+    Save NumPy nparray as raster via GDAL library methods
+    :param nparray: input nparray
+    :param driver_name: driver name, e.g. GeoTIff
+    :param cell_type: type of cell, e.g. Float32
+    :param base_raster_XSize: X-resolution of output raster
+    :param base_raster_YSize: Y-resolution of output raster
+    :param base_raster_projection: Geographic projection for output raster
+    :param base_raster_transform: Geographic transformation type for output raster
+    :param out_path: where output raster will be saved
+    """
     cols = base_raster_XSize
     rows = base_raster_YSize
     bands = 1
@@ -163,9 +216,15 @@ def save_nparray_as_raster (nparray, driver_name, cell_type, base_raster_XSize, 
     out_data.GetRasterBand(1).WriteArray (nparray)
 
 def Landsat8_DN_to_radiance (mode, raster_path, channel_number, metadata_path, output_path = None):
-    # mode 0 - generate tiff
-    # mode 1 - return np array
-
+    """
+    Convert raw Landsat8 scene from DN to radiance
+    :param mode: int; mode 0 - generate tiff; mode 1 - return np array
+    :param raster_path: string; input raster path
+    :param channel_number: int; number of channel to be processed
+    :param metadata_path: string; path to metadata file
+    :param output_path: string; path for output radiance file
+    :return:
+    """
     try:
         int(channel_number)
     except:
@@ -201,7 +260,6 @@ def Landsat8_DN_to_radiance (mode, raster_path, channel_number, metadata_path, o
         transform = landsat_dn_band.GetGeoTransform()
         save_nparray_as_raster(landsat_radiance_band_array,driver_name,cell_type,cols,rows,projection,transform,output_path)
         return
-        #return {"cols":cols,"rows":rows,"cell_type":cell_type,"driver_name":driver_name,"projection":projection,"transform":transform}
     else:
         return landsat_radiance_band_array
 
@@ -209,6 +267,16 @@ def Landsat8_simple_temperature (mode, raster_path, channel_number, metadata_pat
     # mode 0 - generate tiff
     # mode 1 - return np array
 
+    """
+    Return brigtness temperature for Landsat's 8 B10 or B11.
+    :param mode: int; mode 0 - generate tiff; mode 1 - return np array
+    :param raster_path: string; input raster path
+    :param channel_number: int; number of channel to be processed (10 or 11)
+    :param metadata_path: string; path to metadata file
+    :param output_path: string; path for output brightness temperature file
+    :param base_raster: base geotiff layer (needed if mode = 0)
+    :return: string; path for output radiance file
+    """
     try:
         int(channel_number)
     except:
@@ -236,6 +304,11 @@ def Landsat8_simple_temperature (mode, raster_path, channel_number, metadata_pat
         return landsat_temperature_array
 
 def readBasicMetadata (metadataPath):
+    """
+    Read basic metadata parameters, needed for SWA
+    :param metadataPath: string; path to metadata file
+    :return: dict; all parameters as dict
+    """
     mtl_band4 = read_metadata_parameter(metadataPath,'FILE_NAME_BAND_4')
     mtl_band5 = read_metadata_parameter(metadataPath,'FILE_NAME_BAND_5')
     mtl_band10 = read_metadata_parameter(metadataPath,'FILE_NAME_BAND_10')
@@ -257,10 +330,16 @@ def readBasicMetadata (metadataPath):
 
 
 
-### Water wapor
+##### Water wapor #####
 
 def generateOneValueRasterQGisCalc (baseRaster, value, outputPath):
-    # Generates raster with extent and resolution of baseRaster, each pixel is value
+    """
+    Generates raster with extent and resolution of baseRaster, each pixel is value.
+    QgsRasterCalculator used
+    :param baseRaster:
+    :param value: output value
+    :param outputPath: path for output file
+    """
     entries = []
     rCalcObj = QgsRasterCalculatorEntry()
     rCalcObj.ref = 'rCalcObj@1'
@@ -272,10 +351,10 @@ def generateOneValueRasterQGisCalc (baseRaster, value, outputPath):
                                baseRaster.width(), baseRaster.height(), entries)
     calc.processCalculation()
 
-def generateObeValueRasterByArrayGdal (baseRasterArray, value):
+#def generateObeValueRasterByArrayGdal (baseRasterArray, value):
     # mode 0 - generate tiff
     # mode 1 - return np array
-    oneValueArray = (baseRasterArray / baseRasterArray) * value
-    return oneValueArray
+    #oneValueArray = (baseRasterArray / baseRasterArray) * value
+    #return oneValueArray
 
 #def transform

@@ -6,6 +6,15 @@ import math
 from PyQt4.QtGui import QApplication
 
 def generateTPEDProjection(lat1, lon1, lat2, lon2):
+    """
+    Return Two Point Equidistant projection from satellite track start and end point
+    Proj4 is used.
+    :param lat1: latitude of start track point
+    :param lon1: longitude of start track point
+    :param lat2: latitude of end track point
+    :param lon2: longitude of end track point
+    :return: QgsCoordinateReferenceSystem
+    """
     crs = QgsCoordinateReferenceSystem()
     projString = '+proj=tpeqd +lat_1=' + str(lat1) + ' +lon_1=' + str(lon1) + ' +lat_2=' + str(lat2) + ' +lon_2=' + str(
             lon2) + ' +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs'
@@ -14,6 +23,14 @@ def generateTPEDProjection(lat1, lon1, lat2, lon2):
 
 
 def generateLineWithPointFeatures(trackPointFeatures, reproject=False, sourceCRS=None, destCRS=None):
+    """
+    Return line vectroe feature by list of point features. Points connected in order of list
+    :param trackPointFeatures: list of point features
+    :param reproject: booleand. Reproject on fly or not?
+    :param sourceCRS: if reproject - source QgsCoordinateReferenceSystem
+    :param destCRS: if reproject - destination QgsCoordinateReferenceSystem
+    :return: QgsFeature. New line feature.
+    """
     trackLineFeature = QgsFeature()
     trackLineGeometry = []
     for feature in trackPointFeatures:
@@ -30,6 +47,12 @@ def generateLineWithPointFeatures(trackPointFeatures, reproject=False, sourceCRS
 
 
 def addVertexesToPolyPoints(polyPoints, vertexCount):
+    """
+    Add new vertexes to points list.
+    :param polyPoints: list of points
+    :param vertexCount: number of points to be added
+    :return: new (extended) list of points
+    """
     i = 0
     newPolyPoints = []
     while i < len(polyPoints) - 1:
@@ -81,6 +104,13 @@ def addVertexesToPolyPoints(polyPoints, vertexCount):
 
 
 def reprojectPolyPoints(polyPoints, sourceCRS, destCRS):
+    """
+    Reproject list of points
+    :param polyPoints: input points list
+    :param sourceCRS: source coordinate system of points
+    :param destCRS: destinationn coordinate sysyem
+    :return:
+    """
     xform = QgsCoordinateTransform(sourceCRS, destCRS)
     newPolyPoints = []
     i = 0
@@ -94,14 +124,28 @@ def reprojectPolyPoints(polyPoints, sourceCRS, destCRS):
 
 
 def getLineABCCoefficientsByTwoPoints(x1, y1, x2, y2):
+    """
+    Get A, B, C line coefficients of line described by two points
+    :param x1: x coordinate of first point
+    :param y1: y coordinate of first point
+    :param x2: x coordinate of second point
+    :param y2: y coordinate of second point
+    :return: A, B, C coefficients
+    """
     A = (y1 - y2)
     B = (x2 - x1)
     C = (x1 * y2 - x2 * y1)
     return A, B, C
 
 
-# returns needed dictionary index from list of dictionaries by key
 def findDictIndexInList(lst, key, value):
+    """
+    Returns needed dictionary index from list of dictionaries by key
+    :param lst: list of dictionaries
+    :param key: key to find
+    :param value: value to find
+    :return: list index or -1 if not exists
+    """
     for i, dic in enumerate(lst):
         if dic[key] == value:
             return i
@@ -109,6 +153,15 @@ def findDictIndexInList(lst, key, value):
 
 
 def generateSceneExtentForTrackLine(TrackLineFeature, WIDTH, sourceCRS, destCRS, splitBool):
+    """
+    Generates extent for satellite track.
+    :param TrackLineFeature: QgsFeature; path of satellite
+    :param WIDTH: width of scaner
+    :param sourceCRS: coordinate system of track line
+    :param destCRS: coordinate system for output extent
+    :param splitBool: boolean; split object to multigeometry or not at 180 longitude
+    :return: QgsFeature; scene for track.
+    """
     CROSS_CONST = 200
     geom = TrackLineFeature.geometry().asPolyline()
 
@@ -133,12 +186,9 @@ def generateSceneExtentForTrackLine(TrackLineFeature, WIDTH, sourceCRS, destCRS,
                 crossBool = True
             i += 1
 
-        # print WGSTestPoints
-
     ###############################################################
     ### End block
 
-    ###
 
     # add vertexes
     polyPointsWithVertexes = addVertexesToPolyPoints(polyPoints, 30)
@@ -230,6 +280,17 @@ def generateSceneExtentForTrackLine(TrackLineFeature, WIDTH, sourceCRS, destCRS,
 
 
 def generateScenesExtentLayerForDay(year, month, day, tle_line1, tle_line2, sat_name, splitBool):
+    """
+    Generate extents of all scenes for day vian modis_track_generator
+    :param year: year of aquisition
+    :param month: month of aquisition
+    :param day: day of aquisition
+    :param tle_line1: TLE Line 1 for satellite (must be close to aquisition day)
+    :param tle_line2: TLE Line 2 for satellite (must be close to aquisition day)
+    :param sat_name: Name of satellite (e.g. Terra)
+    :param splitBool: split scenes at 180 longitude
+    :return: memory layer with scenes for day
+    """
     WIDTH = 1165000
 
     trackLayer = modis_track_generator.create_orbital_track_shapefile_for_day(year, month, day, 5, tle_line1, tle_line2,

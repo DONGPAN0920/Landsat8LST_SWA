@@ -1,10 +1,10 @@
 /***************************************************************************
- MODIS Track L1 L2
+Landsat 8 LST Retriever (SWA)
                                  A QGIS plugin
- This module allows to create Terra/Aqua track at selected date as shapefile; to create extents of scenes for all track points at day as shapefile; to define needed scenes for user's vector layer. Space-track.org can be used for TLE retrieving
+This module allows to retrieve Land Surface Temperature (LST) from Landsat 8 data (TIRS channels) using Split-Windows Algorithm. Water Vapor content and Land Surface Emissivity needed, but both could be recieved automatically in module (Water vapor via MODIS MOD09, LSE via NDVI).
 
                               -------------------
-        begin                : 2015-12-16
+        begin                : 2015-12-05
         copyright            : (C) 2015 by Eduard Kazakov
         email                : silenteddie@gmail.com
         homepage             : http://ekazakov.info

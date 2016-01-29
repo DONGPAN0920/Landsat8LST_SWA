@@ -15,6 +15,20 @@ from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkRequest
 
 def getWaterVaporForGivenRaster (inputRaster, year, month, day, outputPath,tle1,tle2,processLabel, tempDir):
 
+    """
+    Find needed MOD09 file for raster (e.g. Landsat scene) and download everything needed from NASA FTP'
+    Then cut MOD09 by input raster and fix resolition.
+    :param inputRaster: raster, for which's extent MOD09 will be searched
+    :param year: year of aquisition
+    :param month: month of aquisition
+    :param day: day of aquisition
+    :param outputPath: path, where final Water Vapor grid will be saved
+    :param tle1: TLE line 1
+    :param tle2: TLE line 2
+    :param processLabel: qt label from interface to show status of progress
+    :param tempDir: temporary directory where files will be downloaded
+    :return: 1 or error code
+    """
     processLabel.setText('Calculating TERRA track for day')
     QApplication.processEvents()
 
@@ -66,35 +80,36 @@ def getWaterVaporForGivenRaster (inputRaster, year, month, day, outputPath,tle1,
 
     QgsMapLayerRegistry.instance().removeMapLayer(rasterMaskLayer.id())
     QgsMapLayerRegistry.instance().removeMapLayer(scenesExtent.id())
-
+    ### TO BE CONTINUED
 
 
 def downloadMODL2ForGivenDateAndTime(year, month, day, time, product, rasterFullPath):
     """
-    Скачивает в указанное место продукт MODIS L2 за выбранную дату. При успехе возвращает 1. Иначе код ошибки от 2 до 5
-
-    :param
-    :param time: время в формате hhmm ( 0845 )
-    :param product: Код продукта. MOD09, MOD03 и т.д.
-    :param rasterLayerFullPath:
-    :return:
+    Downloads MODIS L2 product for given date. If success returns 1. Else error code from 2 to 6
+    :param year: year of aquisition
+    :param month: month of aquisition
+    :param day:  day of aquisition
+    :param time: time if format hhmm ( 0845 )
+    :param product: Product code. MOD09, MOD03 etc.
+    :param rasterLayerFullPath: path, where to download
+    :return: 1 or error code
     """
     currentDate = datetime.date(year,month,day)
     currentDayOfYear = currentDate.timetuple().tm_yday
     currentDayOfYear = '0'*(3-len(str(currentDayOfYear))) + str(currentDayOfYear)
 
     try:
-        ftp = FTP('ladsweb.nascom.nasa.gov')
+        ftp = FTP('ladsweb.nascom.nasa.gov') # MODIS NASA FTP
         ftp.login()
     except:
-        return 2  # Неполадки с подключением
+        return 2  # Bad connection
 
     try:
         ftp.cwd('allData/6/'+product+'/')
         ftp.cwd(str(year))
         ftp.cwd(str(currentDayOfYear))
     except:
-        return 3  # Недоступна дата
+        return 3  # Date is unavailable
 
     pathString = 'ftp://ladsweb.nascom.nasa.gov/allData/6/' + product + '/' + str(year) + '/' +\
                  str(currentDayOfYear) + '/'
@@ -102,7 +117,7 @@ def downloadMODL2ForGivenDateAndTime(year, month, day, time, product, rasterFull
     try:
         files = ftp.nlst()
     except:
-        return 4  # Недоступен список файлов
+        return 4  # File list is not available
 
     timestamp = str(year) + str(currentDayOfYear) + '.' + str(time)
     fileFlag = False
@@ -116,10 +131,10 @@ def downloadMODL2ForGivenDateAndTime(year, month, day, time, product, rasterFull
                 shutil.copyfileobj(req, dist)
                 dist.close()
             except:
-                return 5  # Невозможно загрузить файл
+                return 5  # Cannot download file
 
     if not fileFlag:
-        return 6 # Нет такого файла
+        return 6 # No needed file
 
     return 1
 

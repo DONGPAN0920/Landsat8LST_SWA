@@ -90,41 +90,64 @@ class L8_lst_swaMainDlg(QtGui.QWidget):
     ##############################################################
 
     def readyInterface(self):
+        """
+        Set interface to input mode (unblock all, hide progress bar)
+        """
         self.ui.progressBar.setVisible(False)
         self.ui.processLabel.setText('No active processes')
         self.ui.tabWidget.setEnabled(True)
 
     def busyInterface(self):
+        """
+        Set interface to busy mode (block all, show progress bar)
+        """
         self.ui.progressBar.setVisible(True)
         self.ui.tabWidget.setDisabled(True)
 
     def satTabChangeDataType(self):
+        """
+        Change toolBox active tab when radiobutton is pressed
+        """
         if self.ui.satTabDataTypeRawRadioButton.isChecked():
             self.ui.satTabToolBox.setCurrentIndex(0)
         else:
             self.ui.satTabToolBox.setCurrentIndex(1)
 
     def satTabChangeRadioButtons(self):
+        """
+        Change active radioButtom when toolBox active tab is changed
+        """
         if self.ui.satTabToolBox.currentIndex() == 0:
             self.ui.satTabDataTypeRawRadioButton.setChecked(True)
         else:
             self.ui.satTabCorrectedRadioButton.setChecked(True)
 
     def correctedDateChanged(self):
+        """
+        If aquisition date changed
+        """
         self.currentDate = self.ui.satTabAqDateTime.date().toString("dd.MM.yyyy")
 
-    # Open settings for MOD09 Retrieving
     def openModisSettings(self):
+        """
+        Open settings for MOD09 Retrieving
+        """
         self.ModisSettings = l8_lst_swa_settings.L8_lst_swaSettingsDlg()
         self.ModisSettings.show()
 
     def outputBrowse(self):
+        """
+        Open browse dialog for output file selecting
+        """
         filename = QtGui.QFileDialog.getSaveFileName(self, 'Save file', '', '*.tif')
         if filename:
             self.ui.outputLSTLine.setText(filename)
         pass
 
     def mtlBrowse (self):
+        """
+        Open browse dialog for metadata file selecting
+        """
         filename = QtGui.QFileDialog.getOpenFileName(self, 'Open file', '', '*.txt')
         if filename:
             self.ui.satTabMTLPathLine.setText(filename)
@@ -139,6 +162,9 @@ class L8_lst_swaMainDlg(QtGui.QWidget):
     ##############################################################
 
     def outputCheck(self):
+        """
+        Check if output settings are correct
+        """
         if not self.ui.outputLSTLine.text():
             QtGui.QMessageBox.critical(None, "Error", 'Output file not specified')
             self.readyInterface()
@@ -153,6 +179,9 @@ class L8_lst_swaMainDlg(QtGui.QWidget):
             return
 
     def mtlCheck(self):
+        """
+        Check if metadata file is correct and all scenes are available
+        """
         if not self.ui.satTabMTLPathLine.text():
             QtGui.QMessageBox.critical(None, "Error", 'Input MTL file not specified')
             return
@@ -166,6 +195,7 @@ class L8_lst_swaMainDlg(QtGui.QWidget):
             self.readyInterface()
             return
 
+        # Check if extra data available
         #if not (os.path.isfile(metadataBasePath + '/' + mtl_dict['mtl_band4']) and os.path.isfile(
         #                metadataBasePath + '/' + mtl_dict['mtl_band5']) and os.path.isfile(
         #                metadataBasePath + '/' + mtl_dict['mtl_band10']) and os.path.isfile(metadataBasePath + '/' + mtl_dict['mtl_band11'])):
@@ -174,7 +204,6 @@ class L8_lst_swaMainDlg(QtGui.QWidget):
 
         self.ui.statusSatelliteCheckBox.setChecked(True)
 
-        # Check if extra data available
 
 
     ##############################################################
@@ -186,6 +215,9 @@ class L8_lst_swaMainDlg(QtGui.QWidget):
     ##############################################################
 
     def prepareRawLandsat(self):
+        """
+        Get path to scenes from metadata and convert all to radiance
+        """
         metadataPath = self.ui.satTabMTLPathLine.text()
         mtl_dict = l8_lst_swa_common_lib.readBasicMetadata(metadataPath)
         metadataBasePath = os.path.dirname(metadataPath)
@@ -199,10 +231,9 @@ class L8_lst_swaMainDlg(QtGui.QWidget):
         ### NDVI Array
         #NDVIArray = (B5Radiance - B4Radiance) / (B5Radiance + B4Radiance)
 
-    # Close window by pressing "Cancel" button
+
     def cancel(self):
-        pass
-        #TEST
-        #landsat = l8_lst_swa_common_lib.getLayerByName('B4_reflectance')
-        #print modis_water_vapor_interface.getWaterVaporForGivenRaster(landsat,2013,7,2,'s','1 25994U 99068A   13183.23066698  .00000248  00000-0  65149-4 0  9990','2 25994 098.2058 257.9549 0001580 091.8015 268.3387 14.57122310720105', self.ui.processLabel, 'E:\\modistests')
+        """
+        Close window by pressing "Cancel" button
+        """
         self.close()

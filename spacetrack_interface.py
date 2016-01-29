@@ -30,6 +30,16 @@ from urllib2 import HTTPError, urlopen
 import sys
 
 def get_spacetrack_tle_for_id_date (satId, year, month, day, user, password):
+    """
+    returns TLE Lines from space-track.org
+    :param satId: id of satellite (list at space-trak.org)
+    :param year: year of aquisition
+    :param month: month of aquisition
+    :param day: day of aquisition
+    :param user: username for http request
+    :param password: password for http request
+    :return: two string lines
+    """
     date1 = datetime(year,month,day).strftime('%Y-%m-%d')
     date2 = datetime(year,month,day) + timedelta(days=1)
 
@@ -50,6 +60,7 @@ class DownloadError(Exception):
     pass
 
 def downloadResource(url, fn, data=None, unifyErrors=True, timeout=None):
+
     retry = False
     try:
         return _downloadResource(url, fn, data=data, timeout=timeout)
