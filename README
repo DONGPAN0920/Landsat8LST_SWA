@@ -5,7 +5,7 @@ This module allows to retrieve Land Surface Temperature (LST) from Landsat 8 dat
 
                               -------------------
         begin                : 2015-12-05
-        copyright            : (C) 2015 by Eduard Kazakov
+        copyright            : (C) 2016 by Eduard Kazakov
         email                : silenteddie@gmail.com
         homepage             : http://ekazakov.info
  ***************************************************************************/
