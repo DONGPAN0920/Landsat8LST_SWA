@@ -1,3 +1,4 @@
+import re
 from qgis.core import *
 
 import tempfile
@@ -6,6 +7,16 @@ import exceptions
 from osgeo import gdal
 import numpy as np
 from qgis.analysis import QgsRasterCalculator, QgsRasterCalculatorEntry
+import os
+import glob
+
+def clearDir (path = os.path.dirname(os.path.abspath(__file__)) + '\\temp\\'):
+    #tempPath = os.path.dirname(os.path.abspath(__file__)) + '\\temp\\'
+    for file in glob.glob(path + '*.*'):
+        try:
+            os.remove(file)
+        except:
+            pass
 
 def isWritable(path):
     """
@@ -244,12 +255,13 @@ def Landsat8_DN_to_radiance (mode, raster_path, channel_number, metadata_path, o
     quantize_maximum = float(read_metadata_parameter(metadata_path, metadata_channel_quantize_max_str))
     quantize_minimum = float(read_metadata_parameter(metadata_path, metadata_channel_quantize_min_str))
 
-    landsat_dn_band = gdal.Open(raster_path)
-
+    #print raster_path.replace('/','\\')
+    landsat_dn_band = gdal.Open(re.sub("^\s+|\n|\r|\s+$", '', raster_path))
+    #print landsat_dn_band
     landsat_dn_band_array = np.array(landsat_dn_band.GetRasterBand(1).ReadAsArray().astype(np.float32))
-
+    print 'a???'
     landsat_radiance_band_array = ((rad_maximum - rad_minimum)/(quantize_maximum - quantize_minimum))*(landsat_dn_band_array - quantize_minimum) + rad_minimum
-
+    print 'b???'
     if mode == 0:
         # Write result
         cols = landsat_dn_band.RasterXSize
@@ -259,6 +271,7 @@ def Landsat8_DN_to_radiance (mode, raster_path, channel_number, metadata_path, o
         projection = landsat_dn_band.GetProjection()
         transform = landsat_dn_band.GetGeoTransform()
         save_nparray_as_raster(landsat_radiance_band_array,driver_name,cell_type,cols,rows,projection,transform,output_path)
+        del landsat_radiance_band_array
         return
     else:
         return landsat_radiance_band_array
@@ -290,16 +303,17 @@ def Landsat8_simple_temperature (mode, raster_path, channel_number, metadata_pat
     K2_constant = float(read_metadata_parameter(metadata_path,'K2_CONSTANT_BAND_' + str(channel_number)))
 
     landsat_temperature_array = (K2_constant / np.log((K1_constant/landsat_radiance_band_array)+1)) - 273.15
-
+    del landsat_radiance_band_array
     if mode == 0:
-        base_raster = gdal.Open(raster_path)
+        base_raster = gdal.Open(re.sub("^\s+|\n|\r|\s+$", '', raster_path))
         cols = base_raster.RasterXSize
         rows = base_raster.RasterYSize
         cell_type = gdal.GDT_Float32
         driver_name = 'GTiff'
         projection = base_raster.GetProjection()
         transform = base_raster.GetGeoTransform()
-        save_nparray_as_raster(landsat_radiance_band_array,driver_name,cell_type,cols,rows,projection,transform,output_path)
+        save_nparray_as_raster(landsat_temperature_array,driver_name,cell_type,cols,rows,projection,transform,output_path)
+        del landsat_temperature_array
     else:
         return landsat_temperature_array
 
@@ -358,3 +372,21 @@ def generateOneValueRasterQGisCalc (baseRaster, value, outputPath):
     #return oneValueArray
 
 #def transform
+
+def adjustRasterToBaseRaster (baseRaster, adjustingRaster, outputPath):
+    entries = []
+    rCalcObj = QgsRasterCalculatorEntry()
+    rCalcObj.ref = 'rCalcObj@1'
+    rCalcObj.raster = adjustingRaster
+    rCalcObj.bandNumber = 1
+    entries.append(rCalcObj)
+    #print '---'
+    #print baseRaster.extent()
+    #print baseRaster.width()
+    #print baseRaster.height()
+    #print '---'
+    calc = QgsRasterCalculator('rCalcObj@1', outputPath, 'GTiff',
+                               baseRaster.extent(),
+                               baseRaster.width(), baseRaster.height(), entries)
+    #print 'calc'
+    calc.processCalculation()

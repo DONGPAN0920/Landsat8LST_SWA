@@ -23,7 +23,9 @@ could be recieved automatically in module (Water vapor via MODIS MOD09, LSE via 
  *                                                                         *
  ***************************************************************************/
 """
+import gc
 
+import re
 from PyQt4.QtGui import QApplication
 
 from ui import l8_lst_swa_main_ui, l8_lst_swa_settings_ui
@@ -37,6 +39,8 @@ import l8_lst_swa_common_lib
 import os
 import modis_water_vapor_interface
 from osgeo import gdal
+import l8_lst_swa_core
+import numpy as np
 
 class L8_lst_swaMainDlg(QtGui.QWidget):
 
@@ -53,6 +57,7 @@ class L8_lst_swaMainDlg(QtGui.QWidget):
         ##### BUTTON HANDLERS
         ### Common
         self.connect(self.ui.closeButton, QtCore.SIGNAL("clicked()"), self.cancel)
+        self.connect(self.ui.runButton, QtCore.SIGNAL("clicked()"), self.run)
 
         ### Satellite data tab
         self.connect(self.ui.waterVaporMODISSettings, QtCore.SIGNAL("clicked()"), self.openModisSettings)
@@ -64,9 +69,11 @@ class L8_lst_swaMainDlg(QtGui.QWidget):
         self.connect(self.ui.satTabMTLAddButton, QtCore.SIGNAL("clicked()"), self.mtlBrowse)
         self.connect(self.ui.satTabRawCheckButton, QtCore.SIGNAL("clicked()"), self.mtlCheck)
 
+        ### Meteo data tab
+        self.connect(self.ui.waterVaporCheckButton, QtCore.SIGNAL("clicked()"), self.meteoCheck)
 
         ### Ground data tab
-
+        self.connect(self.ui.LSECheckButton, QtCore.SIGNAL("clicked()"), self.groundCheck)
 
         ### Output tab
         self.connect(self.ui.outputLSTBrowseButton, QtCore.SIGNAL("clicked()"), self.outputBrowse)
@@ -82,6 +89,13 @@ class L8_lst_swaMainDlg(QtGui.QWidget):
         self.ui.LSEGRIDComboBox.addItems(rasterLayers)
 
 
+
+        ############ TESTING
+
+        self.ui.satTabMTLPathLine.setText('E:/Landsat8_urban/Petersburg_24_08_15/LC81850182015236LGN00/LC81850182015236LGN00_MTL.txt')
+        self.ui.outputLSTLine.setText('E:/sss.tif')
+
+        ####################
 
         #print modis_water_vapor_interface.downloadMODL2ForGivenDateAndTime(2013,2,5,'0105','MOD03','E:\\lol.hdf')
 
@@ -204,7 +218,20 @@ class L8_lst_swaMainDlg(QtGui.QWidget):
 
         self.ui.statusSatelliteCheckBox.setChecked(True)
 
+    def groundCheck(self):
+        """
+        Check if ground data is correct
+        """
+        if self.ui.LSENDVIRadioButton.isChecked():
+            self.ui.statusGroundCheckBox.setChecked(True)
 
+    def meteoCheck(self):
+        """
+        Check if ground data is correct
+        """
+        if self.ui.waterVaporGRIDRadioButton.isChecked():
+            if self.ui.waterVaporGRIDComboBox.currentText():
+                self.ui.statusMeteoCheckBox.setChecked(True)
 
     ##############################################################
     ################ END CHECK INPUTS
@@ -214,26 +241,113 @@ class L8_lst_swaMainDlg(QtGui.QWidget):
     ################ PROCESSING
     ##############################################################
 
+    def getInputs(self):
+        tempPath = os.path.dirname(os.path.abspath(__file__)) + '\\temp\\'
+        if self.ui.satTabDataTypeRawRadioButton.isChecked():
+            metadataPath = self.ui.satTabMTLPathLine.text()
+            metadataBasePath = os.path.dirname(metadataPath)
+            mtl_dict, B10BrightnessTemperature, B11BrightnessTemperature, LSE10Array, LSE11Array = self.prepareRawLandsat()
+            #print 'lol'
+
+        if self.ui.waterVaporGRIDRadioButton.isChecked():
+            #print 'adj'
+            baseRasterPath = re.sub("^\s+|\n|\r|\s+$", '', metadataBasePath + '/' + mtl_dict['mtl_band10'])
+            baseRaster = QgsRasterLayer(baseRasterPath,'B10 Base Layer')
+            #print baseRaster.isValid()
+            #print baseRaster.extent()
+            waterVaporSourceRaster = l8_lst_swa_common_lib.getLayerByName(self.ui.waterVaporGRIDComboBox.currentText())
+            #print waterVaporSourceRaster.isValid()
+            l8_lst_swa_common_lib.adjustRasterToBaseRaster(baseRaster,waterVaporSourceRaster,tempPath + 'waterVapor.tif')
+            waterVapor = gdal.Open (tempPath + 'waterVapor.tif')
+            waterVaporArray = np.array(waterVapor.GetRasterBand(1).ReadAsArray().astype(np.float32))
+
+        print waterVaporArray.shape
+        print B10BrightnessTemperature.shape
+        print B11BrightnessTemperature.shape
+        print LSE10Array.shape
+        print LSE11Array.shape
+
+        #LSTArray = l8_lst_swa_core.getLSTWithSWAForArray(waterVaporArray,LSE10Array,LSE11Array,B10BrightnessTemperature,B11BrightnessTemperature)
+        LSTArray = (B10BrightnessTemperature + B11BrightnessTemperature) / 2
+        cols = waterVapor.RasterXSize
+        rows = waterVapor.RasterYSize
+        cell_type = gdal.GDT_Float32
+        driver_name = 'GTiff'
+        projection = waterVapor.GetProjection()
+        transform = waterVapor.GetGeoTransform()
+#
+        output_path = self.ui.outputLSTLine.text()
+#
+        l8_lst_swa_common_lib.save_nparray_as_raster(LSTArray,driver_name,cell_type,cols,rows,projection,transform,output_path)
+
+        del waterVaporArray
+        del B10BrightnessTemperature
+        del B11BrightnessTemperature
+        del LSE10Array
+        del LSE11Array
+        gc.collect()
+
     def prepareRawLandsat(self):
         """
         Get path to scenes from metadata and convert all to radiance
         """
+        tempPath = os.path.dirname(os.path.abspath(__file__)) + '\\temp\\'
         metadataPath = self.ui.satTabMTLPathLine.text()
         mtl_dict = l8_lst_swa_common_lib.readBasicMetadata(metadataPath)
         metadataBasePath = os.path.dirname(metadataPath)
-
+        #print 'step1'
         ### B4, B5, B10, B11 to radiance
         B4Radiance = l8_lst_swa_common_lib.Landsat8_DN_to_radiance(1,metadataBasePath + '/' + mtl_dict['mtl_band4'],4,metadataPath)
         B5Radiance = l8_lst_swa_common_lib.Landsat8_DN_to_radiance(1,metadataBasePath + '/' + mtl_dict['mtl_band5'],5,metadataPath)
-        B10Radiance = l8_lst_swa_common_lib.Landsat8_DN_to_radiance(1,metadataBasePath + '/' + mtl_dict['mtl_band10'],10,metadataPath)
-        B11Radiance = l8_lst_swa_common_lib.Landsat8_DN_to_radiance(1,metadataBasePath + '/' + mtl_dict['mtl_band11'],11,metadataPath)
+        #print 'step2'
+
+        B10BrightnessTemperature = l8_lst_swa_common_lib.Landsat8_simple_temperature(1,metadataBasePath + '/' + mtl_dict['mtl_band10'],10,metadataPath)
+        B11BrightnessTemperature = l8_lst_swa_common_lib.Landsat8_simple_temperature(1,metadataBasePath + '/' + mtl_dict['mtl_band11'],11,metadataPath)
+        #print 'step3'
 
         ### NDVI Array
-        #NDVIArray = (B5Radiance - B4Radiance) / (B5Radiance + B4Radiance)
+        NDVIArray = (B5Radiance - B4Radiance) / (B5Radiance + B4Radiance)
+        del B4Radiance
+        del B5Radiance
+        #print 'done'
 
+        getLSEByNDVIVectorized = np.vectorize(l8_lst_swa_core.getLSEByNDVI)
+        LSE10Array = getLSEByNDVIVectorized(NDVIArray, 10)
+        LSE11Array = getLSEByNDVIVectorized(NDVIArray, 11)
+        print 'done'
+        return mtl_dict, B10BrightnessTemperature, B11BrightnessTemperature, LSE10Array, LSE11Array
+
+
+    def run(self):
+        if not self.ui.statusSatelliteCheckBox.isChecked():
+            QtGui.QMessageBox.critical(None, "Error", 'Satellite data is not checked!')
+            self.readyInterface()
+            return
+        if not self.ui.statusMeteoCheckBox.isChecked():
+            QtGui.QMessageBox.critical(None, "Error", 'Meteorological data is not checked!')
+            self.readyInterface()
+            return
+        if not self.ui.statusGroundCheckBox.isChecked():
+            QtGui.QMessageBox.critical(None, "Error", 'Ground data is not checked!')
+            self.readyInterface()
+            return
+        if not self.ui.statusOutputCheckBox.isChecked():
+            QtGui.QMessageBox.critical(None, "Error", 'Output data is not checked!')
+            self.readyInterface()
+            return
+
+        l8_lst_swa_common_lib.clearDir()
+        self.getInputs()
+
+
+        pass
 
     def cancel(self):
         """
         Close window by pressing "Cancel" button
         """
+        #ABCCoefs = l8_lst_swa_core.getABCCoefsForB10B11()
+        #KDCoefs = l8_lst_swa_core.getKDCoefsForB10B11()
+        #print l8_lst_swa_core.getLSTWithSWAForPixel(ABCCoefs,KDCoefs,2.1,0.993,0.965,22.1+273.15,24.3+273.15)
+
         self.close()

@@ -24,6 +24,7 @@ could be recieved automatically in module (Water vapor via MODIS MOD09, LSE via 
  ***************************************************************************/
 """
 import math
+import numpy as np
 
 
 def getT10T11FromWaterWaporContent (waterWaporContent):
@@ -61,7 +62,7 @@ def getKDCoefsForB10B11():
     d11 = -27.7043284
     return {"k10":k10,"d10":d10,"k11":k11,"d11":d11}
 
-def getLSEByNDVI(NDVI):
+def getLSEByNDVI(NDVI, channel):
     if NDVI > 0.5:
         LSE10 = 0.984
         LSE11 = 0.980
@@ -71,39 +72,55 @@ def getLSEByNDVI(NDVI):
     elif (NDVI > 0.0) and (NDVI <= 0.2):
         LSE10 = 0.964
         LSE11 = 0.970
-    elif NDVI < 0:
+    elif NDVI <= 0:
         LSE10 = 0.991
         LSE11 = 0.986
-    return {"LSE10":LSE10, "LSE11":LSE11}
+
+    if channel == 10:
+        return LSE10
+    else:
+        return LSE11
 
 def getBnTByPlanckLaw (BrigtnessTemperature, waveLength):
-    k = 1.3806485279 * (10**(-23)) # Boltzman constant
-    h = 6.62607004081 * (10**(-34)) # Planck constant
+    k = 1.38064852 * (10**(-23)) # Boltzman constant
+    h = 6.626070040 * (10**(-34)) # Planck constant
     c = 299792458 # Speed of light
-    BnT = (2 * h * c * c * waveLength * waveLength *waveLength) / (math.pow(math.e,(h*c*waveLength/k*BrigtnessTemperature))-1)
+    BnT = (2 * h * c * c * waveLength * waveLength * waveLength) / (math.pow(math.e,(h*c*waveLength/(k*(BrigtnessTemperature))))-1)
     return BnT
 
-def getLSTWithSWAForPixel (ABCCoefs, KDCoefs, T10, T11, LSE10, LSE11, B10, B11):
+def getLSTWithSWAForPixel (ABCCoefs, KDCoefs, waterVaporContent, LSE10, LSE11, B10, B11):
+    if not B10 or not B11:
+        return 0
+    TDict = getT10T11FromWaterWaporContent(waterVaporContent)
+    print TDict
+    T10 = TDict["T10"]
+    T11 = TDict["T11"]
 
-    n10 = 10.9
-    n11 = 12.0
+    n10 = 10.9 * (10**-5) # B10 wavelength
+    n11 = 12.0 * (10**-5) # B11 wavelength
 
     A10 = LSE10 * T10 * ABCCoefs["a10"]
     B10 = LSE10 * T10 * ABCCoefs["b10"]
     C10 = (1 - T10) * (1+(1-LSE10)*T10)*KDCoefs["k10"]
-
     B10T = getBnTByPlanckLaw(B10,n10)
+    print B10T
     D10 = LSE10 * T10 * ABCCoefs["c10"] + (1-T10)*(1+(1-LSE10)*T10)*KDCoefs["d10"] - B10T
-
     A11 = LSE11 * T11 * ABCCoefs["a11"]
     B11 = LSE11 * T11 * ABCCoefs["b11"]
     C11 = (1 - T11) * (1+(1-LSE11)*T11)*KDCoefs["k11"]
-
     B11T = getBnTByPlanckLaw(B11,n11)
     D11 = LSE11 * T11 * ABCCoefs["c11"] + (1-T11)*(1+(1-LSE11)*T11)*KDCoefs["d11"] - B11T
-
-    LST_up = ( (C10*B11-C11*B10) + math.sqrt( ((C10*B11-C11*B10)*(C10*B11-C11*B10)) - 4*(C11*A10-C10*A11)*(C11*D10-C10*D11) ) )
+    LST_up = ( (C10*B11-C11*B10) + math.sqrt( math.fabs(((C10*B11-C11*B10)*(C10*B11-C11*B10)) - 4*(C11*A10-C10*A11)*(C11*D10-C10*D11) ) ) )
     LST_down = ( 2*(C11*A10 - C10*A11) )
     LST = LST_up / LST_down
 
     return LST
+
+
+def getLSTWithSWAForArray (waterVaporGRID, LSE10GRID, LSE11GRID, B10Grid, B11Grid):
+    getLSTWithSWAForPixelVectorized = np.vectorize(getLSTWithSWAForPixel)
+    ABCCoefs = getABCCoefsForB10B11()
+    KDCoefs = getKDCoefsForB10B11()
+
+    LSTArray = getLSTWithSWAForPixelVectorized (ABCCoefs, KDCoefs, waterVaporGRID, LSE10GRID, LSE11GRID, B10Grid, B11Grid)
+    return LSTArray
